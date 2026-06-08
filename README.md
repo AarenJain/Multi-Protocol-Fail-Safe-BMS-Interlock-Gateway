@@ -10,25 +10,31 @@ The core gateway logic is written in optimized, deterministic C. It utilizes a *
 
 The project operates entirely in software on macOS/Linux using a loopback testbench built on native Pseudo-Terminals (PTY) via `socat`.
 
-[ EV Emulator ] (Python Telemetry Stream)
-|
-| Packing: [Timestamp | CAN State | Analog Voltage]
-v
-[ /dev/ttys002 ] (PTY Endpoint 1)
-|
-| Virtual OS Communication Bus (socat Link)
-v
-[ /dev/ttys003 ] (PTY Endpoint 2)
-|
-v
-[ Gateway Safety Monitor ] (Optimized Embedded C Binary)
-|
-|--> 1. Network Liveliness: Timeout trip if frame delay > 25ms
-|--> 2. CUSUM Engine: Track continuous mathematical drift
-v
-[ Interlock Relay ] ---> [ TRIP / ISOLATE HARDWARE ]
+```mermaid
+graph TD
+    %% Nodes
+    A[EV Emulator<br/>Python Telemetry Stream]
+    B["/dev/ttys002<br/>PTY Endpoint 1"]
+    C["/dev/ttys003<br/>PTY Endpoint 2"]
+    D[Gateway Safety Monitor<br/>Optimized Embedded C Binary]
+    E1[Network Liveliness Monitor<br/>Timeout trip if frame delay > 25ms]
+    E2[CUSUM Engine<br/>Tracks continuous mathematical drift]
+    F[Interlock Relay<br/>TRIP / ISOLATE HARDWARE]
 
----
+    %% Flow/Connections
+    A -->|Packs: Timestamp, CAN State, Analog Voltage| B
+    B -->|Virtual OS Communication Bus<br/>socat Link| C
+    C --> D
+    D --> E1
+    D --> E2
+    E1 -->|Anomalous State| F
+    E2 -->|Anomalous State| F
+
+    %% Styling
+    style A fill:#f9f,stroke:#333,stroke-width:2px
+    style D fill:#bbf,stroke:#333,stroke-width:2px
+    style F fill:#ff9,stroke:#333,stroke-width:2px
+```
 
 ## Core Detection Methodology
 
@@ -60,4 +66,24 @@ Open a standalone system terminal and launch the linked pseudo-terminal channels
 ```bash
 brew install socat
 socat -d -d pty,raw,echo=0 pty,raw,echo=0
+```
+### 2. Running the Simulation Side-by-Side
+
+To see the vehicle streaming data and the gateway processing it at the same time, split your VS Code terminal into two separate panes (`Cmd + \`) and execute the following commands:
+
+#### 3. Left Pane: Gateway Controller
+```bash
+# 1. Compile the C safety engine with optimization
+gcc -O2 gateway_monitor.c -o gateway_monitor
+
+# 2. Launch the monitor and wait for data
+./gateway_monitor
+```
+#### 4. Right Pane: Vehicle Emulator
+```bash
+# 1. Ensure the localized virtual environment is active
+source venv/bin/activate
+
+# 2. Run the Python script to begin streaming and inject the fault
+python vehicle_emulator.py
 ```
